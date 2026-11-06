@@ -1,3 +1,18 @@
+export const syntheticStudyExample = {
+  subject: "손해사정사 1차 객관식",
+  keyword: "비례·비비례 재보험",
+  action: "합성 예시의 선택 이유를 다시 확인하기",
+  notice: "공식 해설이 아니며 개인 답안이 없습니다.",
+};
+
+const syntheticStudyPrompt = [
+  "합성 학습 예시:",
+  `${syntheticStudyExample.subject} 연습의 내용 키워드 '${syntheticStudyExample.keyword}'.`,
+  `이 예시는 ${syntheticStudyExample.notice}`,
+  `제공된 복습 행동: ${syntheticStudyExample.action}`,
+  "법령 해석·금액 계산·출처·학습 효과는 쓰지 말고, 키워드와 제공된 행동만으로 연습 1개와 다음 행동을 제안해 주세요.",
+].join(" ");
+
 export type SponsorReceipt = {
   provider: string;
   status: "verified" | "awaiting-key" | "awaiting-setup" | "failed";
@@ -41,7 +56,7 @@ export async function runSponsor(provider: "nosana", config: Config, fetcher: ty
       method: "POST",
       body: JSON.stringify({ model, max_tokens: 2048, temperature: 0.2, stream: false, messages: [
         {role: "system", content: "You write a short Korean study suggestion using only the supplied synthetic facts. Do not diagnose, grade, invent learner history, cite sources or promise learning outcomes. Return 2 concise Korean sentences, no reasoning."},
-        {role: "user", content: "합성 학습 예시: 분수 덧셈 3문항 중 2문항에서 분모를 그대로 더하는 오류를 보였다. 제공된 복습 기준: 분모를 같게 만든 다음 분자끼리 더한다. 이 기준을 다시 확인하는 연습 1개와 다음 행동을 제안해 주세요."},
+        {role: "user", content: syntheticStudyPrompt},
       ] }),
     }, fetcher);
     if (result.choices?.[0]?.finish_reason !== "stop") throw new Error("Incomplete generation");

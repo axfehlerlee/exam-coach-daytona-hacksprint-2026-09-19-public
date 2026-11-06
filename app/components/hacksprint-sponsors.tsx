@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import type { SponsorReceipt } from "../lib/hacksprint-sponsors";
+import { syntheticStudyExample, type SponsorReceipt } from "../lib/hacksprint-sponsors";
 
 export function HackSprintSponsors() {
   const [receipts, setReceipts] = useState<Record<string, SponsorReceipt>>({});
@@ -23,11 +23,16 @@ export function HackSprintSponsors() {
     ] as const).map(item => {
       const receipt = receipts[item.id];
       return <article key={item.id} className="daytona-evidence-panel" style={{display:"block"}}>
-        <h3>{item.title}</h3><p>{item.description}</p>
-        <div className="daytona-evidence-actions"><button disabled={running !== null} onClick={() => void run(item.id)}>{running === item.id ? "실제 호출 중…" : item.action}</button></div>
+        <h3>{item.title}</h3>
+        <p>{item.description}</p>
+        <p className="nosana-example-facts">
+          <b>합성 예시 · 현재 시험 과목</b>
+          {syntheticStudyExample.subject} · {syntheticStudyExample.keyword}. {syntheticStudyExample.notice} 제공된 행동: {syntheticStudyExample.action}
+        </p>
+        <div className="daytona-evidence-actions"><button disabled={running !== null} onClick={() => void run(item.id)} type="button">{running === item.id ? "실제 호출 중…" : item.action}</button></div>
         <div aria-live="polite">
-          <p>{receipt?.message ?? "실행 전 · 연결 성공 여부 미확인"}</p>
-          {receipt?.output && <blockquote style={{whiteSpace:"pre-wrap"}}>{receipt.output}</blockquote>}
+          <p className="nosana-safety-note">{receipt?.message ?? "실행 전 · 연결 성공 여부 미확인. 개인 답안은 전송하지 않으며, 생성 결과는 검토가 필요합니다."}</p>
+          {receipt?.output && <blockquote><span>검토가 필요한 생성 결과 · 합성 예시 · 개인 답안 미전송</span>{receipt.output}</blockquote>}
           {receipt && <p><small>{receipt.model ? `모델: ${receipt.model} · ` : ""}확인 시각: {new Date(receipt.checkedAt).toLocaleString("ko-KR", {timeZone:"Asia/Seoul"})} KST</small></p>}
         </div>
       </article>;

@@ -261,6 +261,35 @@ type PersonalKeywordInsight = KeywordInsight & {
   targetQuestion: KeywordQuestionRef | null;
 };
 
+function keywordStudyCopy(insight: PersonalKeywordInsight) {
+  const targetLabel = insight.targetQuestion
+    ? `제${insight.targetQuestion.round}회 ${insight.targetQuestion.questionNo}번`
+    : null;
+  if (insight.accuracy === null) {
+    return {
+      reason: "개인 풀이 기록이 없습니다. 취약도는 계산하지 않고, 출제된 회차 수만 순위에 사용합니다.",
+      action: targetLabel ? `${targetLabel} 문항으로 진단을 시작합니다.` : "연결할 연습문항이 없습니다.",
+    };
+  }
+  const record = `최근 기록 정답률 ${insight.accuracy}% · ${insight.attemptedQuestionCount}문항 측정 · 반복 오답 ${insight.repeatedWrongCount}문항`;
+  if (insight.repeatedWrongCount > 0) {
+    return {
+      reason: `${record}. 같은 키워드에서 두 번 이상 틀린 기록이 있습니다.`,
+      action: targetLabel ? `${targetLabel} 최근 오답 문항을 다시 풉니다.` : "다시 풀 문항이 없습니다.",
+    };
+  }
+  if (insight.accuracy < 100) {
+    return {
+      reason: `${record}. 반복 오답은 없고, 최근 결과 중 오답이 있습니다.`,
+      action: targetLabel ? `${targetLabel} 문항을 다시 확인합니다.` : "다시 볼 문항이 없습니다.",
+    };
+  }
+  return {
+    reason: `${record}.`,
+    action: targetLabel ? `${targetLabel} 문항을 한 번 더 확인합니다.` : "확인할 문항이 없습니다.",
+  };
+}
+
 type Diagnostic = {
   id: string;
   round?: number;
@@ -1076,6 +1105,7 @@ export default function Home() {
   const calculations = keywordData.calculationPatterns as CalculationPattern[];
 
   const [view, setView] = useState<View>("today");
+  const demoDetailsRef = useRef<HTMLDetailsElement>(null);
   useEffect(() => {
     const demo = new URLSearchParams(window.location.search).get("demo");
     if (demo === "jlpt" || demo === "essay") setExamTrack(demo);
@@ -1083,6 +1113,9 @@ export default function Home() {
   }, []);
   const [examTrack, setExamTrack] = useState<ExamTrack>("insurance");
   const [accessState, setAccessState] = useState<"loading" | "unauthenticated" | "authenticated" | "guest">("loading");
+  useEffect(() => {
+    if (view === "pipeline") demoDetailsRef.current?.setAttribute("open", "");
+  }, [view, accessState]);
   const [learner, setLearner] = useState<LearnerAccount | null>(null);
   const [selectedSubject, setSelectedSubject] = useState<SubjectCode>("THEORY");
   const [selectedId, setSelectedId] = useState("48-THEORY-33");
@@ -1751,13 +1784,10 @@ export default function Home() {
   }
 
   function openAnalysis() {
-    if (view === "analysis") return;
+    if (analysisAudience !== "learner") setAnalysisAudience("learner");
+    if (view === "analysis" && analysisAudience === "learner") return;
     setAnalyticsLoading(analytics === null);
     setAnalyticsError(null);
-    if (analysisAudience === "instructor") {
-      setInstructorLoading(true);
-      setInstructorError(null);
-    }
     setView("analysis");
   }
 
@@ -1913,6 +1943,7 @@ export default function Home() {
 
   async function openPipeline() {
     setView("pipeline");
+    demoDetailsRef.current?.setAttribute("open", "");
     if (sponsorPayload || sponsorLoading) return;
     await refreshSponsorStatus();
   }
@@ -1989,7 +2020,10 @@ export default function Home() {
         || b.questionCount - a.questionCount;
     });
   }, [analytics, history]);
-  const displayedKeywordInsights = showAllKeywords ? personalKeywordInsights : personalKeywordInsights.slice(0, 3);
+  const leadKeywordInsight = personalKeywordInsights[0] ?? null;
+  const leadKeywordCopy = leadKeywordInsight ? keywordStudyCopy(leadKeywordInsight) : null;
+  const otherKeywordInsights = personalKeywordInsights.slice(1);
+  const displayedKeywordInsights = showAllKeywords ? otherKeywordInsights : otherKeywordInsights.slice(0, 3);
   const measuredKeywordCount = personalKeywordInsights.filter((insight) => insight.priorityScore !== null).length;
   const instructorDataset = instructorPayload?.dataset ?? null;
   const instructorKeywordInsights = instructorPayload?.insights ?? [];
@@ -2046,10 +2080,10 @@ export default function Home() {
     exam: { eyebrow: `제${examRound}회 · ${examSubjectInfo.name}`, title: "회차를 골라 실전처럼 풉니다" },
     analysis: {
       eyebrow: analysisAudience === "learner" ? "DEMO 세트 40~49 · 합성 문항" : `강의 인사이트 · 합성 학습자 ${instructorDataset?.learnerCount ?? 0}명`,
-      title: analysisAudience === "learner" ? "전회차 출제 흐름과 내 기록" : "이번에 보강할 한 가지",
+      title: analysisAudience === "learner" ? "다음에 복습할 내용 키워드" : "이번에 보강할 한 가지",
     },
     lectures: { eyebrow: `제${lectureRound}회 · ${selectedSubjectInfo.name}`, title: "해당 회차의 취약개념에 맞는 강의 후보" },
-    pipeline: { eyebrow: "Daytona HackSprint Seoul 2026", title: "오늘의 실행 증거" },
+    pipeline: { eyebrow: "데모 · 개발자 증거 · Daytona HackSprint Seoul 2026", title: "실행 증거" },
   };
 
   if (accessState === "loading") return <AccessLoading />;
@@ -2092,14 +2126,11 @@ export default function Home() {
           <button className={`nav-item ${view === "exam" ? "active" : ""}`} onClick={openExam} type="button">
             <ClipboardCheck aria-hidden="true" /><span>회차별 풀이</span>
           </button>
-          <button className={`nav-item ${view === "analysis" ? "active" : ""}`} onClick={openAnalysis} type="button">
+          <button className={`nav-item ${view === "analysis" && analysisAudience === "learner" ? "active" : ""}`} onClick={openAnalysis} type="button">
             <BarChart3 aria-hidden="true" /><span>전회차 분석</span>
           </button>
           <button className={`nav-item ${view === "lectures" ? "active" : ""}`} onClick={() => setView("lectures")} type="button">
             <BookOpen aria-hidden="true" /><span>추천 강의</span>
-          </button>
-          <button className={`nav-item ${view === "pipeline" ? "active" : ""}`} onClick={openPipeline} type="button">
-            <Activity aria-hidden="true" /><span>실행 파이프라인</span>
           </button>
         </nav>
 
@@ -2120,6 +2151,17 @@ export default function Home() {
           </div>
         </div>
 
+        <details className="sidebar-demo" ref={demoDetailsRef}>
+          <summary>데모 · 개발자 증거</summary>
+          <div className="sidebar-demo-body">
+            <p>Daytona 구조 검사와 Nosana 합성 예시 생성 기록입니다. 학습 진단과 분리되어 있으며, 개인 답안은 전송하지 않습니다.</p>
+            <button className={view === "pipeline" ? "active" : ""} onClick={openPipeline} type="button">
+              <Activity aria-hidden="true" />
+              <span>{view === "pipeline" ? "실행 증거 보는 중" : "실행 증거 열기"}</span>
+            </button>
+          </div>
+        </details>
+
         <div className={`learner-card ${accessState === "guest" ? "guest" : ""}`}>
           <UserRound aria-hidden="true" />
           <span>
@@ -2134,11 +2176,11 @@ export default function Home() {
         <ExamStageNavigation stage="first" />
         <div className="review-boundary" role="note">
           <Info aria-hidden="true" />
-          <span><b>Daytona HackSprint Seoul 2026 데모</b> SYNTHETIC DEMO · 문항, 기본 풀이 이력과 분석은 합성 자료입니다. 실제 시험 문항·개인 학습 성과·교재 발췌가 아닙니다. Daytona와 Nosana 실행은 버튼으로 별도 확인합니다.</span>
+          <span><b>합성 연습</b> SYNTHETIC DEMO · 문항, 기본 풀이 이력과 분석은 합성 자료입니다. 실제 시험 문항·개인 학습 성과·교재 발췌가 아닙니다. Daytona·Nosana 실행 증거는 사이드바의 데모 · 개발자 증거에 있습니다.</span>
         </div>
         <header className="topbar">
           <div><p className="eyebrow">{titles[view].eyebrow}</p><h1>{titles[view].title}</h1></div>
-          {!(view === "today" && !todayWorkspaceOpen) && <div className="score-strip" aria-label="학습 기록 요약">
+          {view !== "pipeline" && !(view === "today" && !todayWorkspaceOpen) && <div className="score-strip" aria-label="학습 기록 요약">
             {view === "exam" ? (
               <>
                 <div><span>{viewedLegacyAttempt ? "기록 문항" : "응답 완료"}</span><strong>{examAnsweredCount}<small>/40</small></strong></div>
@@ -2874,12 +2916,34 @@ export default function Home() {
               <>
                 {analysisAudience === "learner" ? (
                   <>
-                <div className="personal-analysis-strip">
-                  <section><span>완료한 회독</span><strong>{completedAttemptCount}<small>개</small></strong></section>
-                  <section><span>응시한 회차</span><strong>{completedRoundCount}<small>/10</small></strong></section>
-                  <section><span>평균 점수</span><strong>{completedAverage ?? "-"}<small>/40</small></strong></section>
-                  <section className="source-note"><Info aria-hidden="true" /><p><b>출처</b>{analytics.source}<small>과거 이력: {legacyPayload.metadata.sourceFile} · {legacyPayload.metadata.questionRecordCount}문항</small></p></section>
-                </div>
+                {leadKeywordInsight && leadKeywordCopy ? (
+                  <section className="keyword-next-action" aria-labelledby="keyword-next-title">
+                    <p className="keyword-next-kicker">다음 복습 1가지</p>
+                    <p className="keyword-next-meta">{leadKeywordInsight.subject} · {leadKeywordInsight.area}</p>
+                    <h3 id="keyword-next-title">{leadKeywordInsight.keyword}</h3>
+                    <p className="keyword-next-reason">{leadKeywordCopy.reason}</p>
+                    <p className="keyword-next-action-line"><b>학습 행동</b> {leadKeywordCopy.action}</p>
+                    <button
+                      className="keyword-study-button primary"
+                      disabled={!leadKeywordInsight.targetQuestion}
+                      onClick={() => leadKeywordInsight.targetQuestion && openSubjectExam(leadKeywordInsight.subjectCode, leadKeywordInsight.targetQuestion.round, null, leadKeywordInsight.targetQuestion.questionNo)}
+                      type="button"
+                    >
+                      이 문항 풀기<ChevronRight aria-hidden="true" />
+                    </button>
+                    <small className="keyword-next-footnote">
+                      {leadKeywordInsight.priorityScore === null
+                        ? `출제 주목도 ${leadKeywordInsight.trendScore}/30. 개인 기록이 없어 취약도와 반복 오답은 더하지 않았습니다.`
+                        : `집중도 ${leadKeywordInsight.priorityScore}/100 · 출제 ${leadKeywordInsight.trendScore}/30 · 취약 ${leadKeywordInsight.weaknessScore}/50 · 반복 ${leadKeywordInsight.repeatScore}/20. 시험 점수가 아닙니다.`}
+                    </small>
+                  </section>
+                ) : (
+                  <section className="keyword-next-action" aria-labelledby="keyword-next-title">
+                    <p className="keyword-next-kicker">다음 복습 1가지</p>
+                    <h3 id="keyword-next-title">이 범위에서 계산된 내용 키워드가 없습니다.</h3>
+                    <p className="keyword-next-reason">출제 기록이나 풀이 기록이 없으면 복습 순위를 만들지 않습니다.</p>
+                  </section>
+                )}
 
                 <section className="keyword-focus-section" aria-labelledby="keyword-focus-title">
                   <div className="panel-heading keyword-focus-heading">
@@ -2896,25 +2960,29 @@ export default function Home() {
                     <p><strong>집중도 100점</strong><span>출제 중요도 30 + 개인 취약 50 + 반복 오답 20</span><small>개인 기록이 없는 키워드는 취약도를 추정하지 않고 출제 주목도만 표시합니다.</small></p>
                   </div>
                   </details>
-                  <div className="keyword-focus-list" role="table" aria-label="내용 키워드별 학습 우선도">
-                    <div className="keyword-focus-head" role="row"><span>내용 키워드</span><span>출제와 내 학습 근거</span><span>집중도</span><span>바로 학습</span></div>
+                  <p className="keyword-list-note">1위는 위의 다음 복습입니다. 아래는 같은 산식의 다음 키워드이며, 출제·풀이 수치는 각 항목에서 펼칩니다.</p>
+                  <div className="keyword-focus-head" aria-hidden="true"><span>내용 키워드</span><span>복습 이유와 행동</span><span>집중도</span></div>
+                  <ul className="keyword-focus-list" aria-label="내용 키워드별 학습 우선도">
                     {displayedKeywordInsights.map((insight) => {
+                      const copy = keywordStudyCopy(insight);
                       const trendText = insight.trendDelta > 0 ? `+${insight.trendDelta}` : String(insight.trendDelta);
                       return (
-                        <div className={`keyword-focus-row ${insight.priorityScore === null ? "unmeasured" : ""}`} key={insight.id} role="row">
+                        <li className={`keyword-focus-row ${insight.priorityScore === null ? "unmeasured" : ""}`} key={insight.id}>
                           <div className="keyword-name-cell">
                             <span>{insight.subject} · {insight.area}</span>
                             <strong>{insight.keyword}</strong>
-                            <small>{insight.caseCount > 0 ? `사례형 ${insight.caseCount}` : ""}{insight.caseCount > 0 && insight.numericCount > 0 ? " · " : ""}{insight.numericCount > 0 ? `수치형 ${insight.numericCount}` : ""}</small>
                           </div>
-                          <div className="keyword-evidence-cell">
-                            <strong>10회 중 {insight.roundCount}회 · 총 {insight.questionCount}문항 출제</strong>
-                            <p>최근 48~49회 비중 {insight.recentRate}% <b className={insight.trendDelta > 0 ? "up" : insight.trendDelta < 0 ? "down" : ""}>({trendText}%p)</b></p>
-                            {insight.accuracy === null ? (
-                              <small>내 풀이 기록 없음 · 먼저 진단해야 취약도를 계산할 수 있습니다.</small>
-                            ) : (
-                              <small>내 최근 정답률 <b>{insight.accuracy}%</b> · {insight.attemptedQuestionCount}문항 측정 · 반복 오답 <b>{insight.repeatedWrongCount}문항</b></small>
-                            )}
+                          <div className="keyword-reason-cell">
+                            <p>{copy.reason}</p>
+                            <p className="keyword-learner-action"><b>학습 행동</b> {copy.action}</p>
+                            <button
+                              className="keyword-study-button quiet"
+                              disabled={!insight.targetQuestion}
+                              onClick={() => insight.targetQuestion && openSubjectExam(insight.subjectCode, insight.targetQuestion.round, null, insight.targetQuestion.questionNo)}
+                              type="button"
+                            >
+                              문항 열기<ChevronRight aria-hidden="true" />
+                            </button>
                           </div>
                           <button className={`keyword-priority ${insight.priorityScore === null ? "pending" : ""}`} type="button" aria-label={insight.priorityScore === null ? `${insight.keyword} 개인 진단 전` : `${insight.keyword} 집중도 ${insight.priorityScore}`}>
                             <span><b>{insight.priorityScore ?? "-"}</b><small>{insight.priorityScore === null ? "진단 전" : "집중도"}</small></span>
@@ -2926,26 +2994,44 @@ export default function Home() {
                               <span>반복 오답 <b>{insight.accuracy === null ? "측정 전" : `+${insight.repeatScore}/20`}</b></span>
                             </span>
                           </button>
-                          <button
-                            className="keyword-study-button"
-                            disabled={!insight.targetQuestion}
-                            onClick={() => insight.targetQuestion && openSubjectExam(insight.subjectCode, insight.targetQuestion.round, null, insight.targetQuestion.questionNo)}
-                            type="button"
-                          >
-                            {insight.accuracy === null ? "진단 시작" : "문제 풀기"}<ChevronRight aria-hidden="true" />
-                          </button>
-                        </div>
+                          <details className="keyword-evidence-details">
+                            <summary>출제·풀이 근거</summary>
+                            <div className="keyword-evidence-cell">
+                              <strong>10회 중 {insight.roundCount}회 · 총 {insight.questionCount}문항 출제</strong>
+                              <p>최근 48~49회 비중 {insight.recentRate}% <b className={insight.trendDelta > 0 ? "up" : insight.trendDelta < 0 ? "down" : ""}>({trendText}%p)</b></p>
+                              <small>{insight.caseCount > 0 ? `사례형 ${insight.caseCount}` : "사례형 0"}{insight.numericCount > 0 ? ` · 수치형 ${insight.numericCount}` : " · 수치형 0"}</small>
+                              {insight.accuracy === null ? (
+                                <small>내 풀이 기록 없음 · 먼저 진단해야 취약도를 계산할 수 있습니다.</small>
+                              ) : (
+                                <small>내 최근 정답률 <b>{insight.accuracy}%</b> · {insight.attemptedQuestionCount}문항 측정 · 반복 오답 <b>{insight.repeatedWrongCount}문항</b></small>
+                              )}
+                              <small>출제 중요도 {insight.trendScore}/30 · 개인 취약 {insight.accuracy === null ? "측정 전" : `${insight.weaknessScore}/50`} · 반복 오답 {insight.accuracy === null ? "측정 전" : `${insight.repeatScore}/20`}</small>
+                            </div>
+                          </details>
+                        </li>
                       );
                     })}
-                  </div>
-                  {personalKeywordInsights.length > 3 && (
+                  </ul>
+                  {otherKeywordInsights.length > 3 && (
                     <button aria-expanded={showAllKeywords} className="keyword-expand-button" onClick={() => setShowAllKeywords((current) => !current)} type="button">
-                      {showAllKeywords ? "우선순위 3개만 보기" : `전체 ${personalKeywordInsights.length}개 키워드 보기`}
+                      {showAllKeywords ? "우선순위 3개만 보기" : `전체 ${otherKeywordInsights.length}개 키워드 보기`}
                     </button>
                   )}
                 </section>
 
+                <details className="analysis-evidence-details">
+                  <summary>학습 기록 요약 · 완료 {completedAttemptCount}회독 · 응시 {completedRoundCount}/10 · 평균 {completedAverage ?? "-"}/40</summary>
+                  <div className="personal-analysis-strip">
+                    <section><span>완료한 회독</span><strong>{completedAttemptCount}<small>개</small></strong></section>
+                    <section><span>응시한 회차</span><strong>{completedRoundCount}<small>/10</small></strong></section>
+                    <section><span>평균 점수</span><strong>{completedAverage ?? "-"}<small>/40</small></strong></section>
+                    <section className="source-note"><Info aria-hidden="true" /><p><b>출처</b>{analytics.source}<small>과거 이력: {legacyPayload.metadata.sourceFile} · {legacyPayload.metadata.questionRecordCount}문항</small></p></section>
+                  </div>
+                </details>
+
                 {(analysisSubject === "ALL" || analysisSubject === "THEORY") && (
+                  <details className="analysis-evidence-details">
+                    <summary>합성 풀이 이력 펼치기 · {legacyPayload.metadata.attemptCount}회독 · 실제 성과 아님</summary>
                   <section className="legacy-score-section" aria-labelledby="legacy-score-title">
                     <div className="panel-heading">
                       <div><span className="section-label">합성 풀이 이력 · 실제 성과 아님</span><h2 id="legacy-score-title">DEMO 세트 43~48 점수 예시</h2></div>
@@ -2970,6 +3056,7 @@ export default function Home() {
                       })}
                     </div>
                   </section>
+                  </details>
                 )}
                   </>
                 ) : (
@@ -3098,6 +3185,8 @@ export default function Home() {
                 )}
 
                 {analysisAudience === "learner" && <>
+                <details className="analysis-evidence-details">
+                  <summary>출제 형식·회차별 통계 펼치기</summary>
                 <div className="change-grid" aria-label="최근 출제 변화">
                   {changeMetrics.map((metric) => (
                     <article key={metric.label} title={metric.description}>
@@ -3144,6 +3233,7 @@ export default function Home() {
                     </div>
                   </aside>
                 </div>
+                </details>
                 </>}
               </>
             ) : null}
@@ -3263,6 +3353,11 @@ export default function Home() {
 
         {view === "pipeline" && (
           <div className="sponsor-workspace">
+            <div className="demo-evidence-banner" role="note">
+              <Info aria-hidden="true" />
+              <span><b>데모 · 개발자 증거</b> 이 화면은 학습 진단이 아닙니다. Daytona 구조 검사와 Nosana 합성 예시 생성 기록입니다. 개인 답안은 전송하지 않으며, AI 결과는 검토가 필요합니다. 구조 검사 성공은 공식 채점이 아닙니다.</span>
+              <button className="pipeline-study-link" onClick={openTodayDashboard} type="button">학습 화면으로</button>
+            </div>
             <div className="panel-heading sponsor-heading">
               <div><span className="section-label">오늘 제출용 실행 상태</span><h2>Daytona · Nosana 실행</h2></div>
               <div className="sponsor-heading-metrics">
