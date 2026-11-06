@@ -17,6 +17,11 @@ test('Nosana chooses a live chat model and sends only bounded synthetic input', 
     const body=JSON.parse(options.body);
     assert.equal(body.model,'chat'); assert.equal(body.max_tokens,2048);
     assert.match(body.messages[1].content,/합성 학습 예시/);
+    assert.match(body.messages[1].content,/손해사정사 1차 객관식/);
+    assert.match(body.messages[1].content,/비례·비비례 재보험/);
+    assert.match(body.messages[1].content,/합성 예시의 선택 이유를 다시 확인하기/);
+    assert.doesNotMatch(body.messages[1].content,/분수|분모/);
+    assert.match(body.messages[1].content,/법령 해석/);
     return json({id:'request-one',choices:[{finish_reason:'stop',message:{content:'분모를 먼저 같게 만들어 보세요.'}}]});
   });
   assert.equal(calls,2); assert.equal(r.status,'verified'); assert.equal(r.requestId,'request-one');

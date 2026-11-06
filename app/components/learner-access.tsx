@@ -114,7 +114,7 @@ export function LearnerAccess({
             <div className="demo-entry-card">
               <p className="eyebrow">Daytona HackSprint Seoul 2026 · SYNTHETIC DEMO</p>
               <h2>공개 합성 데모를 시작합니다</h2>
-              <p>합성 문항과 가상 풀이 기록으로 취약 개념과 다음 학습 행동의 연결을 보여줍니다. Daytona 실행 버튼을 누르면 이 공개 데이터의 검증 결과와 실행 출처를 receipt로 확인할 수 있습니다.</p>
+              <p>합성 문항과 가상 풀이 기록으로 취약 개념과 다음 학습 행동을 연결합니다. Daytona·Nosana 실행 증거는 학습 화면과 분리된 데모 영역에서 확인합니다.</p>
               <button className="access-primary" onClick={onGuest} type="button">
                 로그인 없이 데모 시작 <LogIn aria-hidden="true" />
               </button>

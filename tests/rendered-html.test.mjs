@@ -119,6 +119,16 @@ test("makes the today queue selection rule and round context visible", async () 
   assert.match(pageSource, /openSelectedLecture/);
 });
 
+test("separates the next keyword review from sponsor execution evidence", async () => {
+  const pageSource = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(pageSource, /다음 복습 1가지/);
+  assert.match(pageSource, /데모 · 개발자 증거/);
+  assert.match(pageSource, /출제·풀이 근거/);
+  assert.match(pageSource, /SYNTHETIC DEMO/);
+  assert.match(pageSource, /개인 답안은 전송하지 않으며/);
+  assert.doesNotMatch(pageSource, /실행 파이프라인/);
+});
+
 test("keeps question review priority and keyword learning focus as separate metrics", async () => {
   const [pageSource, coachSource] = await Promise.all([
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
